@@ -1,46 +1,64 @@
 import { Client, GatewayIntentBits } from "discord.js";
-import axios from "axios";
+import fetch from "node-fetch";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-client.login(DISCORD_TOKEN);
-const API_URL = process.env.API_URL || "https://guard-production-8d97.up.railway.app"; // nanti ganti Railway URL
+const TOKEN = process.env.DISCORD_TOKEN; 
+const API_URL = process.env.API_URL || "https://guard-production-8d97.up.railway.app";
 
-client.on("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+client.once("ready", () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  const args = message.content.split(" ");
-  const command = args.shift().toLowerCase();
+  if (message.content === "!banlist") {
+    try {
+      const res = await fetch(`${API_URL}/banlist`);
+      const data = await res.json();
 
-  if (command === "!ban") {
-    const username = args[0];
-    const reason = args.slice(1).join(" ") || "No reason";
-    if (!username) return message.reply("⚠️ Format: `!ban <username> <reason>`");
+      if (data.length === 0) return message.reply("✅ Banlist kosong.");
 
-    await axios.post(`${API_URL}/ban`, { username, reason });
-    message.reply(`🚫 User **${username}** berhasil di-ban. Alasan: ${reason}`);
+      let list = data.map(u => `- **${u.username}** (Reason: ${u.reason})`).join("\n");
+      message.reply(`🚫 Banlist:\n${list}`);
+    } catch (err) {
+      console.error(err);
+      message.reply("⚠️ Gagal ambil data dari API.");
+    }
   }
 
-  if (command === "!unban") {
-    const username = args[0];
-    if (!username) return message.reply("⚠️ Format: `!unban <username>`");
-
-    await axios.post(`${API_URL}/unban`, { username });
-    message.reply(`✅ User **${username}** sudah di-unban.`);
+  if (message.content.startsWith("!ban ")) {
+    const username = message.content.split(" ")[1];
+    try {
+      await fetch(`${API_URL}/ban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, reason: "Banned via Discord bot" })
+      });
+      message.reply(`🚫 User **${username}** berhasil di-ban.`);
+    } catch (err) {
+      console.error(err);
+      message.reply("⚠️ Gagal ban user.");
+    }
   }
 
-  if (command === "!banlist") {
-    const res = await axios.get(`${API_URL}/banlist`);
-    const list = res.data.map(u => `- ${u.username} (${u.reason})`).join("\n") || "Banlist kosong ✅";
-    message.reply(`📜 **Banlist:**\n${list}`);
+  if (message.content.startsWith("!unban ")) {
+    const username = message.content.split(" ")[1];
+    try {
+      await fetch(`${API_URL}/unban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username })
+      });
+      message.reply(`✅ User **${username}** berhasil di-unban.`);
+    } catch (err) {
+      console.error(err);
+      message.reply("⚠️ Gagal unban user.");
+    }
   }
 });
 
-client.login(DISCORD_TOKEN);
+client.login(TOKEN);
