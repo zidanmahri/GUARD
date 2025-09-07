@@ -1,82 +1,113 @@
-import express from "express";
-import fetch from "node-fetch";
-import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
-import dotenv from "dotenv";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import "dotenv/config";
 
-dotenv.config();
-
-const app = express();
-app.use(express.json());
-
-// === DISCORD BOT SETUP ===
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildBans],
 });
 
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
-
-// Command handler
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  if (interaction.commandName === "ping") {
-    await interaction.reply("🏓 Pong!");
-  }
-
-  if (interaction.commandName === "banlist") {
-    try {
-      const res = await fetch(`${process.env.API_BASE}/banlist`);
-      const data = await res.json();
-
-      if (data.length === 0) {
-        await interaction.reply("⚡ Tidak ada user yang diban.");
-      } else {
-        await interaction.reply(
-          "🚫 Daftar banned:\n" + data.map((u) => `- ${u}`).join("\n")
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      await interaction.reply("❌ Gagal mengambil banlist dari API.");
-    }
-  }
-});
-
-// === REGISTER SLASH COMMANDS ===
+// ========== REGISTER COMMAND ==========
 const commands = [
-  { name: "ping", description: "Cek apakah bot online" },
-  { name: "banlist", description: "Lihat daftar ban" },
-];
+  new SlashCommandBuilder()
+    .setName("banlist")
+    .setDescription("Lihat semua user yang terban"),
+  new SlashCommandBuilder()
+    .setName("ban")
+    .setDescription("Ban user dari server")
+    .addUserOption(option =>
+      option.setName("target").setDescription("User yang mau di-ban").setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("reason").setDescription("Alasan ban").setRequired(false)
+    ),
+  new SlashCommandBuilder()
+    .setName("unban")
+    .setDescription("Unban user dari server")
+    .addStringOption(option =>
+      option.setName("userid").setDescription("ID user yang mau di-unban").setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("profile")
+    .setDescription("Lihat profil user")
+    .addUserOption(option =>
+      option.setName("target").setDescription("User yang mau dicek").setRequired(true)
+    ),
+].map(command => command.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
-    console.log("⏳ Refreshing application (/) commands...");
-
+    console.log("🚀 Registering slash commands...");
     await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands }
     );
-
-    console.log("✅ Successfully registered commands.");
+    console.log("✅ Slash commands registered!");
   } catch (error) {
     console.error(error);
   }
 })();
 
-client.login(process.env.DISCORD_TOKEN);
+// ========== HANDLE COMMAND ==========
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
-// === EXPRESS SERVER ===
-app.get("/", (req, res) => {
-  res.send("Bot & API Running 🚀");
+  const { commandName } = interaction;
+
+  if (commandName === "banlist") {
+    const bans = await interaction.guild.bans.fetch();
+    if (bans.size === 0) {
+      await interaction.reply("📭 Tidak ada user yang terban.");
+    } else {
+      const list = bans.map(b => `${b.user.tag} (${b.user.id})`).join("\n");
+      await interaction.reply(`📜 **Banlist:**\n${list}`);
+    }
+  }
+
+  if (commandName === "ban") {
+    const target = interaction.options.getUser("target");
+    const reason = interaction.options.getString("reason") || "Tidak ada alasan";
+
+    try {
+      await interaction.guild.members.ban(target, { reason });
+      await interaction.reply(`🔨 ${target.tag} berhasil di-ban. Alasan: ${reason}`);
+    } catch (err) {
+      await interaction.reply("❌ Gagal ban user, pastikan saya punya permission.");
+    }
+  }
+
+  if (commandName === "unban") {
+    const userId = interaction.options.getString("userid");
+
+    try {
+      await interaction.guild.members.unban(userId);
+      await interaction.reply(`✅ User dengan ID ${userId} berhasil di-unban.`);
+    } catch (err) {
+      await interaction.reply("❌ Gagal unban user, cek lagi ID-nya.");
+    }
+  }
+
+  if (commandName === "profile") {
+    const target = interaction.options.getUser("target");
+
+    const embed = {
+      color: 0x0099ff,
+      title: `${target.tag}`,
+      thumbnail: { url: target.displayAvatarURL() },
+      fields: [
+        { name: "ID", value: target.id, inline: true },
+        { name: "Bot?", value: target.bot ? "Ya" : "Tidak", inline: true },
+        { name: "Created At", value: target.createdAt.toDateString(), inline: false },
+      ],
+    };
+
+    await interaction.reply({ embeds: [embed] });
+  }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("🌐 Server running on port " + (process.env.PORT || 3000));
+// ========== BOT READY ==========
+client.once("ready", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
+
+client.login(process.env.TOKEN);
