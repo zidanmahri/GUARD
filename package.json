@@ -1,13 +1,11 @@
 {
-  "name": "roblox-guard",
+  "name": "rbxguard-bot",
   "version": "1.0.0",
-  "type": "module",
-  "description": "Discord bot untuk mengelola banlist Roblox lewat API",
+  "description": "Discord bot + API untuk RBXGuard",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "start:bot": "node bot.js",
-    "deploy:commands": "node deploy-commands.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
