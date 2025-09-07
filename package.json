@@ -1,11 +1,11 @@
 {
-  "name": "roblox-ban-api",
+  "name": "roblox-ban-system",
   "version": "1.0.0",
   "main": "api.js",
-  "scripts": {
-    "start": "node api.js"
-  },
+  "type": "module",
   "dependencies": {
-    "express": "^4.18.2"
+    "axios": "^1.6.7",
+    "discord.js": "^14.15.3",
+    "express": "^4.19.2"
   }
 }
