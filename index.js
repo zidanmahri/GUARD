@@ -1,77 +1,44 @@
-import { Client, GatewayIntentBits } from "discord.js";
-import fetch from "node-fetch";
-import "dotenv/config";
+import express from "express";
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const app = express();
+app.use(express.json());
 
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+let banlist = []; // simpan banlist di memory sementara
+
+// ambil banlist
+app.get("/banlist", (req, res) => {
+  res.json(banlist);
 });
 
-// 🔹 Prefix command
-client.on("messageCreate", async (msg) => {
-  if (msg.author.bot) return;
-
-  if (msg.content === "!ping") {
-    msg.reply("🏓 Pong!");
+// tambahkan user ke banlist
+app.post("/ban", (req, res) => {
+  const { username } = req.body;
+  if (!username) {
+    return res.status(400).json({ error: "username wajib diisi" });
   }
-
-  if (msg.content.startsWith("!banlist")) {
-    try {
-      const res = await fetch(`${process.env.API_BASE}/banlist`);
-      const data = await res.json();
-
-      if (!data || data.length === 0) {
-        msg.reply("📋 Banlist kosong.");
-      } else {
-        const list = data.map((u, i) => `${i + 1}. ${u.username} - ${u.reason}`).join("\n");
-        msg.reply(`📋 Banlist:\n${list}`);
-      }
-    } catch (err) {
-      msg.reply("⚠️ Gagal ambil data dari API.");
-    }
+  if (!banlist.includes(username)) {
+    banlist.push(username);
   }
+  res.json({ success: true, banlist });
 });
 
-// 🔹 Slash command
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  if (interaction.commandName === "ping") {
-    await interaction.reply("🏓 Pong!");
+// hapus user dari banlist
+app.post("/unban", (req, res) => {
+  const { username } = req.body;
+  if (!username) {
+    return res.status(400).json({ error: "username wajib diisi" });
   }
-
-  if (interaction.commandName === "banlist") {
-    try {
-      const res = await fetch(`${process.env.API_BASE}/banlist`);
-      const data = await res.json();
-
-      if (!data || data.length === 0) {
-        await interaction.reply("📋 Banlist kosong.");
-      } else {
-        const list = data.map((u, i) => `${i + 1}. ${u.username} - ${u.reason}`).join("\n");
-        await interaction.reply(`📋 Banlist:\n${list}`);
-      }
-    } catch (err) {
-      await interaction.reply("⚠️ Gagal ambil data dari API.");
-    }
-  }
-
-  if (interaction.commandName === "userinfo") {
-    const username = interaction.options.getString("username");
-    try {
-      const res = await fetch(`${process.env.API_BASE}/userinfo?username=${username}`);
-      const data = await res.json();
-
-      if (!data) {
-        await interaction.reply(`❌ User **${username}** tidak ditemukan.`);
-      } else {
-        await interaction.reply(`👤 Info User:\n- Username: ${data.username}\n- ID: ${data.id}\n- Status: ${data.status}`);
-      }
-    } catch (err) {
-      await interaction.reply("⚠️ Gagal ambil data user.");
-    }
-  }
+  banlist = banlist.filter(u => u !== username);
+  res.json({ success: true, banlist });
 });
 
-client.login(process.env.DISCORD_TOKEN);
+// root
+app.get("/", (req, res) => {
+  res.send("✅ Roblox Guard API jalan");
+});
+
+// Railway butuh port dari ENV
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 API jalan di port ${PORT}`);
+});
