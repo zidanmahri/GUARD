@@ -1,18 +1,24 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder 
+} from "discord.js";
 import "dotenv/config";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildBans],
 });
 
-// ========== REGISTER COMMAND ==========
+// ================= REGISTER COMMAND =================
 const commands = [
   new SlashCommandBuilder()
     .setName("banlist")
-    .setDescription("Lihat semua user yang terban"),
+    .setDescription("📜 Lihat semua user yang terban di server ini"),
   new SlashCommandBuilder()
     .setName("ban")
-    .setDescription("Ban user dari server")
+    .setDescription("🔨 Ban user dari server")
     .addUserOption(option =>
       option.setName("target").setDescription("User yang mau di-ban").setRequired(true)
     )
@@ -21,13 +27,13 @@ const commands = [
     ),
   new SlashCommandBuilder()
     .setName("unban")
-    .setDescription("Unban user dari server")
+    .setDescription("✅ Unban user dari server")
     .addStringOption(option =>
       option.setName("userid").setDescription("ID user yang mau di-unban").setRequired(true)
     ),
   new SlashCommandBuilder()
     .setName("profile")
-    .setDescription("Lihat profil user")
+    .setDescription("🧾 Lihat profil user")
     .addUserOption(option =>
       option.setName("target").setDescription("User yang mau dicek").setRequired(true)
     ),
@@ -37,33 +43,40 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
-    console.log("🚀 Registering slash commands...");
+    console.log("🚀 Registering global slash commands...");
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationCommands(process.env.CLIENT_ID), // global command
       { body: commands }
     );
-    console.log("✅ Slash commands registered!");
+    console.log("✅ Semua slash command berhasil di-register!");
   } catch (error) {
     console.error(error);
   }
 })();
 
-// ========== HANDLE COMMAND ==========
+// ================= HANDLE COMMAND =================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName } = interaction;
 
+  // === BANLIST ===
   if (commandName === "banlist") {
     const bans = await interaction.guild.bans.fetch();
     if (bans.size === 0) {
       await interaction.reply("📭 Tidak ada user yang terban.");
     } else {
-      const list = bans.map(b => `${b.user.tag} (${b.user.id})`).join("\n");
-      await interaction.reply(`📜 **Banlist:**\n${list}`);
+      const embed = {
+        color: 0xff0000,
+        title: "📜 Daftar Ban",
+        description: bans.map(b => `🔒 **${b.user.tag}** (\`${b.user.id}\`)`).join("\n"),
+        footer: { text: `Total: ${bans.size} user` }
+      };
+      await interaction.reply({ embeds: [embed] });
     }
   }
 
+  // === BAN ===
   if (commandName === "ban") {
     const target = interaction.options.getUser("target");
     const reason = interaction.options.getString("reason") || "Tidak ada alasan";
@@ -76,6 +89,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
+  // === UNBAN ===
   if (commandName === "unban") {
     const userId = interaction.options.getString("userid");
 
@@ -87,6 +101,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
+  // === PROFILE ===
   if (commandName === "profile") {
     const target = interaction.options.getUser("target");
 
@@ -95,9 +110,9 @@ client.on("interactionCreate", async (interaction) => {
       title: `${target.tag}`,
       thumbnail: { url: target.displayAvatarURL() },
       fields: [
-        { name: "ID", value: target.id, inline: true },
-        { name: "Bot?", value: target.bot ? "Ya" : "Tidak", inline: true },
-        { name: "Created At", value: target.createdAt.toDateString(), inline: false },
+        { name: "🆔 ID", value: target.id, inline: true },
+        { name: "🤖 Bot?", value: target.bot ? "Ya" : "Tidak", inline: true },
+        { name: "📅 Dibuat", value: target.createdAt.toDateString(), inline: false },
       ],
     };
 
@@ -105,7 +120,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// ========== BOT READY ==========
+// ================= READY =================
 client.once("ready", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
