@@ -6,7 +6,7 @@ const client = new Client({
 });
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const API_URL = process.env.API_URL || "http://localhost:3000"; // nanti ganti Railway URL
+const API_URL = process.env.API_URL || "https://guard-production-8d97.up.railway.app"; // nanti ganti Railway URL
 
 client.on("ready", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
