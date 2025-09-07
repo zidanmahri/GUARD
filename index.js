@@ -1,44 +1,82 @@
 import express from "express";
+import fetch from "node-fetch";
+import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-let banlist = []; // simpan banlist di memory sementara
-
-// ambil banlist
-app.get("/banlist", (req, res) => {
-  res.json(banlist);
+// === DISCORD BOT SETUP ===
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-// tambahkan user ke banlist
-app.post("/ban", (req, res) => {
-  const { username } = req.body;
-  if (!username) {
-    return res.status(400).json({ error: "username wajib diisi" });
-  }
-  if (!banlist.includes(username)) {
-    banlist.push(username);
-  }
-  res.json({ success: true, banlist });
+client.once("ready", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// hapus user dari banlist
-app.post("/unban", (req, res) => {
-  const { username } = req.body;
-  if (!username) {
-    return res.status(400).json({ error: "username wajib diisi" });
+// Command handler
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "ping") {
+    await interaction.reply("🏓 Pong!");
   }
-  banlist = banlist.filter(u => u !== username);
-  res.json({ success: true, banlist });
+
+  if (interaction.commandName === "banlist") {
+    try {
+      const res = await fetch(`${process.env.API_BASE}/banlist`);
+      const data = await res.json();
+
+      if (data.length === 0) {
+        await interaction.reply("⚡ Tidak ada user yang diban.");
+      } else {
+        await interaction.reply(
+          "🚫 Daftar banned:\n" + data.map((u) => `- ${u}`).join("\n")
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      await interaction.reply("❌ Gagal mengambil banlist dari API.");
+    }
+  }
 });
 
-// root
+// === REGISTER SLASH COMMANDS ===
+const commands = [
+  { name: "ping", description: "Cek apakah bot online" },
+  { name: "banlist", description: "Lihat daftar ban" },
+];
+
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
+  try {
+    console.log("⏳ Refreshing application (/) commands...");
+
+    await rest.put(
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
+      { body: commands }
+    );
+
+    console.log("✅ Successfully registered commands.");
+  } catch (error) {
+    console.error(error);
+  }
+})();
+
+client.login(process.env.DISCORD_TOKEN);
+
+// === EXPRESS SERVER ===
 app.get("/", (req, res) => {
-  res.send("✅ Roblox Guard API jalan");
+  res.send("Bot & API Running 🚀");
 });
 
-// Railway butuh port dari ENV
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 API jalan di port ${PORT}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log("🌐 Server running on port " + (process.env.PORT || 3000));
 });
