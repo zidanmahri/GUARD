@@ -1,38 +1,33 @@
 import express from "express";
+import bodyParser from "body-parser";
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Simpan data banlist sementara di memory
 let banlist = [];
 
-// Endpoint cek siapa saja yang di-ban
+// ✅ GET banlist
 app.get("/banlist", (req, res) => {
   res.json(banlist);
 });
 
-// Endpoint ban user
+// 🚫 Ban user
 app.post("/ban", (req, res) => {
   const { username, reason } = req.body;
-  if (!username) {
-    return res.status(400).json({ error: "Username required" });
-  }
-  if (!banlist.find(u => u.username === username)) {
-    banlist.push({ username, reason: reason || "No reason" });
-  }
-  res.json({ success: true, banlist });
+  if (!username) return res.status(400).json({ error: "Username required" });
+
+  banlist.push({ username, reason: reason || "No reason" });
+  res.json({ message: `${username} banned` });
 });
 
-// Endpoint unban user
+// ✅ Unban user
 app.post("/unban", (req, res) => {
   const { username } = req.body;
+  if (!username) return res.status(400).json({ error: "Username required" });
+
   banlist = banlist.filter(u => u.username !== username);
-  res.json({ success: true, banlist });
+  res.json({ message: `${username} unbanned` });
 });
 
-// 🚀 FIX: gunakan PORT dari Railway
-const PORT = process.env.PORT || 8080;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🌐 API running on http://0.0.0.0:${PORT}`);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ API running on port ${PORT}`));
