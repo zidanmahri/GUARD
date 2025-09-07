@@ -1,6 +1,7 @@
 {
   "name": "roblox-guard",
   "version": "1.0.0",
+  "type": "module",   <── ini ditambah
   "description": "Discord bot untuk mengelola banlist Roblox lewat API",
   "main": "index.js",
   "scripts": {
