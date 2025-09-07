@@ -1,34 +1,36 @@
-const express = require("express");
+import express from "express";
+
 const app = express();
 app.use(express.json());
 
-// Simpan ban list sementara (RAM)
-// nanti bisa diupgrade ke database (MongoDB/Firebase)
-let banList = [];
+// Simpan data banlist sementara di memory
+let banlist = [];
 
-// Endpoint ban
-app.post("/ban", (req, res) => {
-    const { username } = req.body;
-    if (!banList.includes(username)) {
-        banList.push(username);
-        console.log("🚫 Ban:", username);
-    }
-    res.json({ success: true, message: `${username} banned` });
-});
-
-// Endpoint unban
-app.post("/unban", (req, res) => {
-    const { username } = req.body;
-    banList = banList.filter(u => u !== username);
-    console.log("🟢 Unban:", username);
-    res.json({ success: true, message: `${username} unbanned` });
-});
-
-// Endpoint untuk Roblox cek banlist
+// Endpoint cek siapa saja yang di-ban
 app.get("/banlist", (req, res) => {
-    res.json(banList);
+  res.json(banlist);
 });
 
-// Jalankan server
+// Endpoint ban user
+app.post("/ban", (req, res) => {
+  const { username, reason } = req.body;
+  if (!username) {
+    return res.status(400).json({ error: "Username required" });
+  }
+  if (!banlist.find(u => u.username === username)) {
+    banlist.push({ username, reason: reason || "No reason" });
+  }
+  res.json({ success: true, banlist });
+});
+
+// Endpoint unban user
+app.post("/unban", (req, res) => {
+  const { username } = req.body;
+  banlist = banlist.filter(u => u.username !== username);
+  res.json({ success: true, banlist });
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🌐 API running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🌐 API running on http://localhost:${PORT}`);
+});
