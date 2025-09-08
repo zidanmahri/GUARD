@@ -1,4 +1,4 @@
-// index.js (Versi dengan fungsi /ban)
+// index.js (Versi Final Gabungan - Perbaikan Duplikasi)
 
 import express from "express";
 import fetch from "node-fetch";
@@ -8,15 +8,16 @@ import 'dotenv/config';
 // === 1. KONFIGURASI ===
 const TOKEN = process.env.DISCORD_TOKEN;
 const PORT = process.env.PORT || 8080;
+const API_URL = process.env.API_URL;
 const UNIVERSE_ID = process.env.UNIVERSE_ID;
 const API_KEY = process.env.ROBLOX_API_KEY;
-// ... (Pastikan variabel lain sudah ada)
 
-// === FUNGSI HELPER (Tidak berubah) ===
-async function getRobloxUserInfo(username) { /* ... (fungsi dari sebelumnya) ... */ }
-async function getBanlistFromRoblox() { /* ... (fungsi dari sebelumnya) ... */ }
+if (!TOKEN || !API_URL || !UNIVERSE_ID || !API_KEY) {
+    console.error("❌ Variabel lingkungan wajib (DISCORD_TOKEN, API_URL, UNIVERSE_ID, ROBLOX_API_KEY) belum diatur!");
+    process.exit(1);
+}
 
-// (Salin fungsi getRobloxUserInfo dan getBanlistFromRoblox dari kode sebelumnya ke sini)
+// === FUNGSI HELPER UNTUK MENGAMBIL DATA ===
 async function getRobloxUserInfo(username) {
     const userSearchRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${username}`);
     const userSearchData = await userSearchRes.json();
@@ -25,6 +26,7 @@ async function getRobloxUserInfo(username) {
     const userDetailData = await userDetailRes.json();
     return { id: userDetailData.id, name: userDetailData.name, displayName: userDetailData.displayName, description: userDetailData.description, isBanned: userDetailData.isBanned, created: userDetailData.created, url: `https://www.roblox.com/users/${userDetailData.id}/profile` };
 }
+
 async function getBanlistFromRoblox() {
     const DATASTORE_NAME = "BanList";
     const url = `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/datastores/${DATASTORE_NAME}/entries`;
@@ -36,7 +38,7 @@ async function getBanlistFromRoblox() {
 
 
 // === 2. SETUP DISCORD BOT ===
-const client = new Client({ intents: [GatewayIntentBits.Guilds] }); // Cukup Guilds jika hanya pakai slash command
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.once('clientReady', () => console.log(`✅ Bot Discord online sebagai ${client.user.tag}`));
 
 
@@ -45,40 +47,65 @@ client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const { commandName } = interaction;
 
-    // ... (Handler untuk /ping, /userinfo, /banlist tidak berubah)
-    if (commandName === 'banlist') { /* ... (kode banlist dari sebelumnya) ... */ }
-    if (commandName === 'userinfo') { /* ... (kode userinfo dari sebelumnya) ... */ }
     if (commandName === 'ping') { await interaction.reply({ content: "Pong!", ephemeral: true }); }
 
-    // ===== LOGIKA BARU UNTUK /ban =====
+    if (commandName === "userinfo") {
+        const username = interaction.options.getString('username');
+        await interaction.deferReply();
+        try {
+            const data = await getRobloxUserInfo(username);
+            const embed = new EmbedBuilder()
+                .setColor(data.isBanned ? '#FF0000' : '#0099FF').setTitle(data.displayName).setURL(data.url)
+                .setAuthor({ name: `@${data.name}` }).setDescription(data.description || 'Tidak ada deskripsi.')
+                .addFields(
+                    { name: 'User ID', value: data.id.toString(), inline: true },
+                    { name: 'Status Akun', value: data.isBanned ? 'Banned' : 'Aktif', inline: true },
+                    { name: 'Tanggal Dibuat', value: new Date(data.created).toLocaleDateString('id-ID'), inline: true }
+                ).setTimestamp().setFooter({ text: 'Informasi User Roblox' });
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            await interaction.editReply(`❌ Gagal mendapatkan info: ${error.message}`);
+        }
+    }
+    
+    if (commandName === 'banlist') {
+        await interaction.deferReply();
+        try {
+            const data = await getBanlistFromRoblox();
+            if (!data || data.length === 0) return await interaction.editReply("✅ Tidak ada user yang di-ban.");
+            const bannedUserIDs = data.map(entry => entry.key.split('_')[1] || entry.key).join('\n- ');
+            const embed = new EmbedBuilder()
+                .setColor('#FF0000').setTitle('🚫 Daftar Ban Game')
+                .setDescription(`Berikut adalah daftar User ID yang saat ini di-ban:\n- ${bannedUserIDs}`)
+                .setTimestamp().setFooter({ text: `Total: ${data.length} user` });
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            await interaction.editReply(`❌ Gagal mengambil banlist: ${error.message}`);
+        }
+    }
+
     if (commandName === "ban") {
-        // PENTING: Cek izin! Hanya admin yang boleh menggunakan perintah ini.
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
             return await interaction.reply({ content: "❌ Anda tidak memiliki izin untuk menggunakan perintah ini.", ephemeral: true });
         }
 
         const username = interaction.options.getString('username');
         const reason = interaction.options.getString('reason') || "Tidak ada alasan.";
-        
         await interaction.deferReply();
 
         try {
-            // Bot memanggil API-nya sendiri untuk melakukan ban
-            const response = await fetch(`${process.env.API_URL}/ban-player`, {
+            const response = await fetch(`${API_URL}/ban-player`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     username: username,
                     reason: reason,
-                    bannedBy: interaction.user.tag // Kirim siapa yang melakukan ban
+                    bannedBy: interaction.user.tag
                 })
             });
-
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
-
             await interaction.editReply(`✅ Berhasil mem-ban pemain **${username}** dengan alasan: *${reason}*.`);
-
         } catch (error) {
             await interaction.editReply(`❌ Gagal mem-ban pemain: ${error.message}`);
         }
@@ -88,28 +115,26 @@ client.on("interactionCreate", async (interaction) => {
 
 // === 4. EXPRESS SERVER & API ===
 const app = express();
-app.use(express.json()); // Middleware untuk membaca body JSON dari request
+app.use(express.json()); 
 
 app.get("/", (req, res) => res.send(`🤖 Bot & API Service berjalan.`));
 
-// ... (Endpoint /userinfo dan /banlist tidak berubah)
-app.get('/userinfo/:username', async (req, res) => { try { const data = await getRobloxUserInfo(req.params.username); res.status(200).json(data); } catch (error) { res.status(404).json({ error: error.message }); } });
-app.get('/banlist', async (req, res) => { try { const data = await getBanlistFromRoblox(); res.status(200).json(data); } catch (error) { res.status(500).json({ error: error.message }); } });
+app.get('/userinfo/:username', async (req, res) => {
+    try { const data = await getRobloxUserInfo(req.params.username); res.status(200).json(data); } catch (error) { res.status(404).json({ error: error.message }); }
+});
 
+app.get('/banlist', async (req, res) => {
+    try { const data = await getBanlistFromRoblox(); res.status(200).json(data); } catch (error) { res.status(500).json({ error: error.message }); }
+});
 
-// ===== ENDPOINT BARU UNTUK MEM-BAN =====
 app.post('/ban-player', async (req, res) => {
     const { username, reason, bannedBy } = req.body;
-
-    if (!username) {
-        return res.status(400).json({ error: "Username pemain diperlukan." });
-    }
+    if (!username) { return res.status(400).json({ error: "Username pemain diperlukan." }); }
 
     try {
-        // Dapatkan dulu UserId dari username
         const userInfo = await getRobloxUserInfo(username);
         const userId = userInfo.id;
-        const key = tostring(userId); // Kunci DataStore adalah UserId
+        const key = String(userId);
 
         const dataToSave = {
             reason: reason || "Tidak ada alasan.",
@@ -118,18 +143,13 @@ app.post('/ban-player', async (req, res) => {
         };
         
         const DATASTORE_NAME = "BanList";
-        const url = `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/datastores/${DATASTORE_NAME}/entries/entry`;
+        // URL untuk Open Cloud v1 Set Entry API
+        const url = `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/datastores/${DATASTORE_NAME}/entries/entry?datastoreEntryKey=${key}`;
 
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'x-api-key': API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dataToSave),
-            params: {
-                'datastoreEntryKey': key
-            }
+            headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSave)
         });
         
         if (!response.ok) {
@@ -138,7 +158,6 @@ app.post('/ban-player', async (req, res) => {
         }
 
         res.status(200).json({ success: true, message: `Pemain ${username} (ID: ${userId}) berhasil di-ban.` });
-
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
