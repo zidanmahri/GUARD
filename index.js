@@ -159,4 +159,17 @@ app.get('/banlist', async (req, res) => {
         });
 
         if (!response.ok) {
-            const error
+            const errorBody = await response.text();
+            console.error("Roblox API Error:", errorBody);
+            return res.status(response.status).json({ error: `Gagal mengambil data dari Roblox: ${response.statusText}` });
+        }
+        
+        const data = await response.json();
+        res.status(200).json(data.entries);
+
+    } catch (error) {
+        // Baris "const error" yang salah sudah dihapus dari sini
+        console.error("API Error on /banlist:", error);
+        res.status(500).json({ error: 'Server gagal berkomunikasi dengan Roblox Open Cloud.' });
+    }
+});
