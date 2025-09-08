@@ -1,82 +1,82 @@
+// index.js
 import express from "express";
 import fetch from "node-fetch";
-import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
-import dotenv from "dotenv";
+import { Client, GatewayIntentBits } from "discord.js";
+import 'dotenv/config';
 
-dotenv.config();
+// === KONFIGURASI UTAMA ===
+const TOKEN = process.env.DISCORD_TOKEN;
+const PORT = process.env.PORT || 8080;
+const API_URL = process.env.API_URL; // Pastikan ini diatur di Railway Variables
 
-const app = express();
-app.use(express.json());
+if (!TOKEN || !API_URL) {
+    console.error("❌ Variabel lingkungan DISCORD_TOKEN dan API_URL wajib diisi!");
+    process.exit(1); // Hentikan proses jika variabel penting tidak ada
+}
+
 
 // === DISCORD BOT SETUP ===
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent // Tambahkan jika perlu membaca konten pesan
+    ],
 });
 
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+    console.log(`🤖 Bot logged in as ${client.user.tag}`);
 });
 
-// Command handler
+// === COMMAND HANDLER ===
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === "ping") {
-    await interaction.reply("🏓 Pong!");
-  }
+    const { commandName } = interaction;
 
-  if (interaction.commandName === "banlist") {
-    try {
-      const res = await fetch(`${process.env.API_BASE}/banlist`);
-      const data = await res.json();
-
-      if (data.length === 0) {
-        await interaction.reply("⚡ Tidak ada user yang diban.");
-      } else {
-        await interaction.reply(
-          "🚫 Daftar banned:\n" + data.map((u) => `- ${u}`).join("\n")
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      await interaction.reply("❌ Gagal mengambil banlist dari API.");
+    if (commandName === "ping") {
+        await interaction.reply({ content: "🏓 Pong!", ephemeral: true });
     }
-  }
+
+    if (commandName === "banlist") {
+        try {
+            await interaction.deferReply(); // Memberi tahu Discord bot sedang "berpikir"
+
+            const response = await fetch(`${API_URL}/banlist`);
+            if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+            
+            const data = await response.json();
+
+            if (!data || data.length === 0) {
+                await interaction.editReply("⚡ Tidak ada user yang ditemukan di dalam daftar ban.");
+            } else {
+                const userList = data.map((user) => `- ${user}`).join("\n");
+                await interaction.editReply(`🚫 **Daftar User yang Di-ban:**\n${userList}`);
+            }
+        } catch (error) {
+            console.error("Error fetching banlist:", error);
+            await interaction.editReply("❌ Gagal mengambil data banlist dari API. Silakan coba lagi nanti.");
+        }
+    }
+
+    if (commandName === "userinfo") {
+        // Logika untuk userinfo bisa ditambahkan di sini
+        const username = interaction.options.getString('username');
+        await interaction.reply(`🔎 Mencari informasi untuk user: **${username}**... (Fitur ini sedang dalam pengembangan)`);
+    }
 });
 
-// === REGISTER SLASH COMMANDS ===
-const commands = [
-  { name: "ping", description: "Cek apakah bot online" },
-  { name: "banlist", description: "Lihat daftar ban" },
-];
+// Login bot ke Discord
+client.login(TOKEN);
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-(async () => {
-  try {
-    console.log("⏳ Refreshing application (/) commands...");
+// === EXPRESS SERVER (Agar tidak di-stop oleh Railway) ===
+const app = express();
 
-    await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
-      { body: commands }
-    );
-
-    console.log("✅ Successfully registered commands.");
-  } catch (error) {
-    console.error(error);
-  }
-})();
-
-client.login(process.env.DISCORD_TOKEN);
-
-// === EXPRESS SERVER ===
 app.get("/", (req, res) => {
-  res.send("Bot & API Running 🚀");
+    res.send(`🤖 Bot Discord ${client.user ? client.user.tag : '(starting)'} sedang berjalan.`);
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("🌐 Server running on port " + (process.env.PORT || 3000));
+app.listen(PORT, () => {
+    console.log(`🌐 Server berjalan di port ${PORT}`);
 });
