@@ -6,12 +6,12 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "start:bot": "node index.js"
+    "deploy-commands": "node deploy-commands.js"
   },
   "dependencies": {
-  "discord.js": "14.15.1",
-  "dotenv": "^16.4.5",
-  "express": "^4.19.2",
-  "node-fetch": "^3.3.2"
-}
+    "discord.js": "14.15.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2"
+  }
 }
