@@ -1,201 +1,101 @@
-import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
-import express from "express";
-import fetch from "node-fetch";
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+require('dotenv').config();
 
-// ========== SETUP DISCORD CLIENT ==========
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// ========== EXPRESS API ==========
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-let banList = []; // penyimpanan ban list lokal
-
-app.get("/", (req, res) => {
-    res.send("RBXGuard API Aktif 🚀");
-});
-
-app.get("/banlist", (req, res) => {
-    res.json(banList);
-});
-
-app.listen(PORT, () => {
-    console.log(`✅ API berjalan di port ${PORT}`);
-});
-
-// ========== FUNGSI ROBLOX API ==========
-async function getRobloxUserInfo(username) {
-    // 1. Cari userId dari username
-    const userSearchRes = await fetch("https://users.roblox.com/v1/usernames/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernames: [username] })
-    });
-
-    const userSearchData = await userSearchRes.json();
-    if (!userSearchData.data || userSearchData.data.length === 0) {
-        throw new Error(`User Roblox "${username}" tidak ditemukan.`);
-    }
-
-    const userId = userSearchData.data[0].id;
-
-    // 2. Ambil detail + stats
-    const [detailsRes, friendsRes, followersRes, followingsRes] = await Promise.all([
-        fetch(`https://users.roblox.com/v1/users/${userId}`),
-        fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-        fetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-        fetch(`https://friends.roblox.com/v1/users/${userId}/followings/count`)
-    ]);
-
-    const detailsData = await detailsRes.json();
-    const friendsData = await friendsRes.json();
-    const followersData = await followersRes.json();
-    const followingsData = await followingsRes.json();
-
-    return {
-        id: detailsData.id,
-        name: detailsData.name,
-        displayName: detailsData.displayName,
-        description: detailsData.description || "No description.",
-        isBanned: detailsData.isBanned,
-        created: detailsData.created,
-        url: `https://www.roblox.com/users/${userId}/profile`,
-        friendsCount: friendsData.count,
-        followersCount: followersData.count,
-        followingsCount: followingsData.count
-    };
-}
-
-// ========== SLASH COMMANDS ==========
+// ==================== REGISTER COMMANDS ====================
 const commands = [
     new SlashCommandBuilder()
-        .setName("ban")
-        .setDescription("Ban user Roblox")
-        .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true)),
-
+        .setName('userinfo')
+        .setDescription('Menampilkan info user Roblox')
+        .addStringOption(option =>
+            option.setName('username')
+                .setDescription('Masukkan username Roblox')
+                .setRequired(true)
+        ),
     new SlashCommandBuilder()
-        .setName("unban")
-        .setDescription("Unban user Roblox")
-        .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true)),
-
+        .setName('ban')
+        .setDescription('Ban user Roblox')
+        .addStringOption(option =>
+            option.setName('username')
+                .setDescription('Masukkan username Roblox')
+                .setRequired(true)
+        ),
     new SlashCommandBuilder()
-        .setName("banlist")
-        .setDescription("Lihat daftar banlist"),
-
+        .setName('unban')
+        .setDescription('Unban user Roblox')
+        .addStringOption(option =>
+            option.setName('username')
+                .setDescription('Masukkan username Roblox')
+                .setRequired(true)
+        ),
     new SlashCommandBuilder()
-        .setName("userinfo")
-        .setDescription("Cek profil user Roblox")
-        .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true))
-].map(cmd => cmd.toJSON());
+        .setName('banlist')
+        .setDescription('Lihat daftar user yang di-ban')
+];
 
-// Register ke Discord
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
     try {
-        console.log("⏳ Registering slash commands...");
-        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-        console.log("✅ Slash commands berhasil di-register!");
-    } catch (err) {
-        console.error("❌ Error register commands:", err);
+        console.log('Mendaftarkan slash command...');
+        await rest.put(
+            Routes.applicationCommands(process.env.CLIENT_ID),
+            { body: commands }
+        );
+        console.log('✅ Berhasil daftar slash command');
+    } catch (error) {
+        console.error(error);
     }
 })();
 
-// ========== HANDLE COMMANDS ==========
-client.on("interactionCreate", async interaction => {
+// ==================== BOT HANDLER ====================
+client.on('ready', () => {
+    console.log(`✅ Bot login sebagai ${client.user.tag}`);
+});
+
+let banList = [];
+
+client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    const { commandName } = interaction;
+    const { commandName, options } = interaction;
 
-    try {
-        if (commandName === "ban") {
-            const username = interaction.options.getString("username");
-            const userInfo = await getRobloxUserInfo(username);
+    if (commandName === 'userinfo') {
+        const username = options.getString('username');
+        const embed = new EmbedBuilder()
+            .setTitle(`📜 Info User Roblox`)
+            .addFields(
+                { name: '👤 Username', value: username, inline: true },
+                { name: '🔒 Status', value: banList.includes(username) ? '🚫 Banned' : '✅ Active', inline: true }
+            )
+            .setColor(banList.includes(username) ? 0xff0000 : 0x00ff00)
+            .setTimestamp();
 
-            if (!banList.find(u => u.id === userInfo.id)) {
-                banList.push(userInfo);
-            }
+        await interaction.reply({ embeds: [embed] });
+    }
 
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle(`🚫 Banned ${userInfo.name}`)
-                        .setDescription(`[Profile Link](${userInfo.url})`)
-                        .addFields(
-                            { name: "Display Name", value: userInfo.displayName, inline: true },
-                            { name: "Friends", value: userInfo.friendsCount.toString(), inline: true },
-                            { name: "Followers", value: userInfo.followersCount.toString(), inline: true }
-                        )
-                        .setColor("Red")
-                ]
-            });
+    if (commandName === 'ban') {
+        const username = options.getString('username');
+        if (!banList.includes(username)) banList.push(username);
+        await interaction.reply(`🚫 User **${username}** berhasil di-ban.`);
+    }
+
+    if (commandName === 'unban') {
+        const username = options.getString('username');
+        banList = banList.filter(u => u !== username);
+        await interaction.reply(`✅ User **${username}** berhasil di-unban.`);
+    }
+
+    if (commandName === 'banlist') {
+        if (banList.length === 0) {
+            await interaction.reply('📭 Tidak ada user yang di-ban.');
+        } else {
+            await interaction.reply(`🚫 Daftar Ban: \n${banList.map(u => `- ${u}`).join('\n')}`);
         }
-
-        if (commandName === "unban") {
-            const username = interaction.options.getString("username");
-            const userInfo = await getRobloxUserInfo(username);
-
-            banList = banList.filter(u => u.id !== userInfo.id);
-
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle(`✅ Unbanned ${userInfo.name}`)
-                        .setDescription(`[Profile Link](${userInfo.url})`)
-                        .setColor("Green")
-                ]
-            });
-        }
-
-        if (commandName === "banlist") {
-            if (banList.length === 0) {
-                await interaction.reply("📭 Banlist kosong.");
-                return;
-            }
-
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle("📌 Daftar Banlist")
-                        .setDescription(banList.map(u => `- [${u.name}](${u.url})`).join("\n"))
-                        .setColor("Orange")
-                ]
-            });
-        }
-
-        if (commandName === "userinfo") {
-            const username = interaction.options.getString("username");
-            const userInfo = await getRobloxUserInfo(username);
-
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle(`👤 Profil ${userInfo.name}`)
-                        .setDescription(`[Profile Link](${userInfo.url})`)
-                        .addFields(
-                            { name: "Display Name", value: userInfo.displayName, inline: true },
-                            { name: "Friends", value: userInfo.friendsCount.toString(), inline: true },
-                            { name: "Followers", value: userInfo.followersCount.toString(), inline: true },
-                            { name: "Following", value: userInfo.followingsCount.toString(), inline: true },
-                            { name: "Banned?", value: userInfo.isBanned ? "❌ Yes" : "✅ No", inline: true },
-                            { name: "Created", value: userInfo.created }
-                        )
-                        .setColor("Blue")
-                ]
-            });
-        }
-    } catch (err) {
-        console.error("❌ Command error:", err);
-        await interaction.reply({ content: "⚠️ Terjadi kesalahan, coba lagi nanti.", ephemeral: true });
     }
 });
 
-// ========== LOGIN BOT ==========
-client.once("clientReady", c => {
-    console.log(`🤖 Logged in sebagai ${c.user.tag}`);
-});
-
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.TOKEN);
