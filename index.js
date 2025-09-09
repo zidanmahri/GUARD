@@ -8,7 +8,7 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
 
-// ========== EXPRESS API (opsional untuk monitoring) ==========
+// ========== EXPRESS API ==========
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -28,7 +28,7 @@ app.listen(PORT, () => {
 
 // ========== FUNGSI ROBLOX API ==========
 async function getRobloxUserInfo(username) {
-    // 1. Cari userId berdasarkan username
+    // 1. Cari userId dari username
     const userSearchRes = await fetch("https://users.roblox.com/v1/usernames/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,7 +42,7 @@ async function getRobloxUserInfo(username) {
 
     const userId = userSearchData.data[0].id;
 
-    // 2. Ambil detail akun + statistik
+    // 2. Ambil detail + stats
     const [detailsRes, friendsRes, followersRes, followingsRes] = await Promise.all([
         fetch(`https://users.roblox.com/v1/users/${userId}`),
         fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
@@ -86,12 +86,12 @@ const commands = [
         .setDescription("Lihat daftar banlist"),
 
     new SlashCommandBuilder()
-        .setName("cekprofil")
+        .setName("userinfo")
         .setDescription("Cek profil user Roblox")
         .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true))
 ].map(cmd => cmd.toJSON());
 
-// Register commands ke Discord
+// Register ke Discord
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
@@ -166,7 +166,7 @@ client.on("interactionCreate", async interaction => {
             });
         }
 
-        if (commandName === "cekprofil") {
+        if (commandName === "userinfo") {
             const username = interaction.options.getString("username");
             const userInfo = await getRobloxUserInfo(username);
 
