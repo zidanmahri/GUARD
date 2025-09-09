@@ -17,7 +17,7 @@ if (!TOKEN || !API_URL || !UNIVERSE_ID || !API_KEY) {
     process.exit(1);
 }
 
-// === FUNGSI HELPER UNTUK MENGAMBIL DATA ===
+// === FUNGSI HELPER UNTUK MENGAMBIL DATA ==
 
 async function getRobloxUserInfo(username) {
     const userSearchRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${username}`);
