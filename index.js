@@ -1,101 +1,135 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-require('dotenv').config();
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import express from "express";
+import dotenv from "dotenv";
 
+dotenv.config();
+
+// ==== DISCORD CLIENT ====
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// ==================== REGISTER COMMANDS ====================
+// Fake Database (simulasi)
+const banList = new Map(); // key: userId, value: reason
+
+// ==== SLASH COMMANDS ====
 const commands = [
-    new SlashCommandBuilder()
-        .setName('userinfo')
-        .setDescription('Menampilkan info user Roblox')
-        .addStringOption(option =>
-            option.setName('username')
-                .setDescription('Masukkan username Roblox')
-                .setRequired(true)
-        ),
-    new SlashCommandBuilder()
-        .setName('ban')
-        .setDescription('Ban user Roblox')
-        .addStringOption(option =>
-            option.setName('username')
-                .setDescription('Masukkan username Roblox')
-                .setRequired(true)
-        ),
-    new SlashCommandBuilder()
-        .setName('unban')
-        .setDescription('Unban user Roblox')
-        .addStringOption(option =>
-            option.setName('username')
-                .setDescription('Masukkan username Roblox')
-                .setRequired(true)
-        ),
-    new SlashCommandBuilder()
-        .setName('banlist')
-        .setDescription('Lihat daftar user yang di-ban')
-];
+  new SlashCommandBuilder()
+    .setName("ban")
+    .setDescription("Ban user dari sistem.")
+    .addStringOption(option =>
+      option.setName("userid").setDescription("ID User Roblox/Discord").setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("reason").setDescription("Alasan ban").setRequired(false)
+    ),
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  new SlashCommandBuilder()
+    .setName("unban")
+    .setDescription("Unban user dari sistem.")
+    .addStringOption(option =>
+      option.setName("userid").setDescription("ID User Roblox/Discord").setRequired(true)
+    ),
 
-(async () => {
-    try {
-        console.log('Mendaftarkan slash command...');
-        await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
-            { body: commands }
-        );
-        console.log('✅ Berhasil daftar slash command');
-    } catch (error) {
-        console.error(error);
-    }
-})();
+  new SlashCommandBuilder()
+    .setName("banlist")
+    .setDescription("Melihat daftar user yang di-ban."),
 
-// ==================== BOT HANDLER ====================
-client.on('ready', () => {
-    console.log(`✅ Bot login sebagai ${client.user.tag}`);
+  new SlashCommandBuilder()
+    .setName("userinfo")
+    .setDescription("Cek profil user.")
+    .addUserOption(option =>
+      option.setName("target").setDescription("User Discord yang ingin dicek").setRequired(true)
+    ),
+].map(cmd => cmd.toJSON());
+
+// ==== REGISTER COMMANDS ====
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
+async function registerCommands() {
+  try {
+    console.log("⏳ Registering slash commands...");
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    console.log("✅ Slash commands berhasil di-register!");
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// ==== EVENT HANDLER ====
+client.on("ready", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-let banList = [];
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
+  const { commandName } = interaction;
 
-    const { commandName, options } = interaction;
+  // /ban
+  if (commandName === "ban") {
+    const userId = interaction.options.getString("userid");
+    const reason = interaction.options.getString("reason") || "Tidak ada alasan";
 
-    if (commandName === 'userinfo') {
-        const username = options.getString('username');
-        const embed = new EmbedBuilder()
-            .setTitle(`📜 Info User Roblox`)
-            .addFields(
-                { name: '👤 Username', value: username, inline: true },
-                { name: '🔒 Status', value: banList.includes(username) ? '🚫 Banned' : '✅ Active', inline: true }
-            )
-            .setColor(banList.includes(username) ? 0xff0000 : 0x00ff00)
-            .setTimestamp();
+    banList.set(userId, reason);
+    await interaction.reply(`🚫 User **${userId}** berhasil di-ban. Alasan: ${reason}`);
+  }
 
-        await interaction.reply({ embeds: [embed] });
+  // /unban
+  if (commandName === "unban") {
+    const userId = interaction.options.getString("userid");
+
+    if (banList.has(userId)) {
+      banList.delete(userId);
+      await interaction.reply(`✅ User **${userId}** berhasil di-unban.`);
+    } else {
+      await interaction.reply(`⚠️ User **${userId}** tidak ada di banlist.`);
     }
+  }
 
-    if (commandName === 'ban') {
-        const username = options.getString('username');
-        if (!banList.includes(username)) banList.push(username);
-        await interaction.reply(`🚫 User **${username}** berhasil di-ban.`);
+  // /banlist
+  if (commandName === "banlist") {
+    if (banList.size === 0) {
+      await interaction.reply("📂 Banlist kosong.");
+    } else {
+      let list = "";
+      banList.forEach((reason, userId) => {
+        list += `- **${userId}**: ${reason}\n`;
+      });
+      await interaction.reply(`📂 **Daftar Ban:**\n${list}`);
     }
+  }
 
-    if (commandName === 'unban') {
-        const username = options.getString('username');
-        banList = banList.filter(u => u !== username);
-        await interaction.reply(`✅ User **${username}** berhasil di-unban.`);
-    }
+  // /userinfo
+  if (commandName === "userinfo") {
+    const target = interaction.options.getUser("target");
 
-    if (commandName === 'banlist') {
-        if (banList.length === 0) {
-            await interaction.reply('📭 Tidak ada user yang di-ban.');
-        } else {
-            await interaction.reply(`🚫 Daftar Ban: \n${banList.map(u => `- ${u}`).join('\n')}`);
-        }
-    }
+    const embed = new EmbedBuilder()
+      .setTitle(`👤 User Info: ${target.tag}`)
+      .setThumbnail(target.displayAvatarURL())
+      .addFields(
+        { name: "ID", value: target.id, inline: true },
+        { name: "Bot?", value: target.bot ? "✅ Yes" : "❌ No", inline: true }
+      )
+      .setColor("Blue")
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
 });
 
+// ==== EXPRESS SERVER ====
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+app.get("/", (req, res) => {
+  res.send("✅ RBXGuard Bot berjalan!");
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ API berjalan di port ${PORT}`);
+});
+
+// ==== START BOT ====
+registerCommands();
 client.login(process.env.TOKEN);
