@@ -1,37 +1,51 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 const fs = require("fs");
-require("dotenv").config();
+const path = require("path");
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
+  ]
+});
+
 client.commands = new Collection();
-
-// Load semua file command di root folder
 const commands = [];
-const commandFiles = fs.readdirSync("./").filter(file => file.endsWith(".js") && file !== "index.js");
+
+// Load command files
+const commandFiles = fs
+  .readdirSync(__dirname)
+  .filter(file => file.endsWith(".js") && file !== "index.js");
 
 for (const file of commandFiles) {
-  const command = require(`./${file}`);
-  client.commands.set(command.data.name, command);
-  commands.push(command.data.toJSON());
+  const command = require(path.join(__dirname, file));
+  if (command.data && command.execute) {
+    client.commands.set(command.data.name, command);
+    commands.push(command.data.toJSON());
+  }
 }
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
 // Register slash commands
-(async () => {
+client.once("ready", async () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+
+  const rest = new REST({ version: "10" }).setToken("TOKEN_DISCORD_MU");
+
   try {
-    console.log("⏳ Registering slash commands...");
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationCommands(client.user.id),
       { body: commands }
     );
-    console.log("✅ Slash commands registered!");
+    console.log("✅ Slash commands berhasil di-register.");
   } catch (err) {
     console.error(err);
   }
-})();
+});
 
-client.on("interactionCreate", async interaction => {
+// Handle slash command interaction
+client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
@@ -39,14 +53,13 @@ client.on("interactionCreate", async interaction => {
 
   try {
     await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-    await interaction.reply({ content: "❌ Error saat menjalankan command ini.", ephemeral: true });
+  } catch (err) {
+    console.error(err);
+    await interaction.reply({
+      content: "❌ Terjadi error saat menjalankan command ini.",
+      ephemeral: true
+    });
   }
 });
 
-client.once("ready", () => {
-  console.log(`✅ Bot login sebagai ${client.user.tag}`);
-});
-
-client.login(process.env.DISCORD_TOKEN);
+client.login("TOKEN_DISCORD_MU");
