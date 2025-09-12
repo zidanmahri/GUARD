@@ -1,0 +1,64 @@
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const fetch = require("node-fetch");
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("userinfo")
+    .setDescription("Cek profil user Roblox")
+    .addStringOption(opt =>
+      opt.setName("username").setDescription("Username Roblox").setRequired(true)
+    ),
+  async execute(interaction) {
+    const username = interaction.options.getString("username");
+
+    try {
+      const res = await fetch("https://users.roblox.com/v1/usernames/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames: [username] })
+      });
+      const data = await res.json();
+      if (!data.data || data.data.length === 0) {
+        return interaction.reply("❌ User tidak ditemukan.");
+      }
+
+      const user = data.data[0];
+      const userId = user.id;
+
+      const infoRes = await fetch(`https://users.roblox.com/v1/users/${userId}`);
+      const info = await infoRes.json();
+
+      const avatarRes = await fetch(
+        `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`
+      );
+      const avatarData = await avatarRes.json();
+      const avatarUrl = avatarData.data[0]?.imageUrl || null;
+
+      const friends = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`)).json()).count || 0;
+      const followers = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`)).json()).count || 0;
+      const following = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/followings/count`)).json()).count || 0;
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2f3136)
+        .setTitle(`👤 ${info.displayName} / ${info.name}`)
+        .setURL(`https://www.roblox.com/users/${userId}/profile`)
+        .setThumbnail(avatarUrl)
+        .addFields(
+          { name: "Username", value: info.name, inline: true },
+          { name: "ID", value: `${userId}`, inline: true },
+          { name: "Friends", value: `${friends}`, inline: true },
+          { name: "Followers", value: `${followers}`, inline: true },
+          { name: "Following", value: `${following}`, inline: true },
+          { name: "Description", value: info.description || "No description.", inline: false },
+          { name: "Account Created", value: new Date(info.created).toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" }) }
+        )
+        .setFooter({ text: "Powered by DNXX" })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply("❌ Gagal mengambil data dari Roblox API.");
+    }
+  }
+};
