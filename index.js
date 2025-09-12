@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Collection } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const fs = require("fs");
 const fetch = require("node-fetch");
 require("dotenv").config();
@@ -37,7 +37,7 @@ const commands = [
 ].map(cmd => cmd.toJSON());
 
 // register slash commands
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
@@ -110,4 +110,4 @@ client.once("ready", () => {
   console.log(`✅ Bot login sebagai ${client.user.tag}`);
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.DISCORD_TOKEN);
