@@ -39,8 +39,8 @@ module.exports = {
       const following = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/followings/count`)).json()).count || 0;
 
       const embed = new EmbedBuilder()
-        .setColor(0x2f3136)
-        .setTitle(`👤 ${info.displayName} / ${info.name}`)
+        .setColor(0xcc0000)
+        .setTitle(`STECU ${info.displayName} / ${info.name}`)
         .setURL(`https://www.roblox.com/users/${userId}/profile`)
         .setThumbnail(avatarUrl)
         .addFields(
