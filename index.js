@@ -1,51 +1,43 @@
+const { Client, GatewayIntentBits, REST, Routes, Collection } = require("discord.js");
 const fs = require("fs");
-const path = require("path");
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
+require("dotenv").config();
 
+// Init client
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
 client.commands = new Collection();
-const commands = [];
 
-// Load command files
-const commandFiles = fs
-  .readdirSync(__dirname)
-  .filter(file => file.endsWith(".js") && file !== "index.js");
+// === Load Commands ===
+const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 
 for (const file of commandFiles) {
-  const command = require(path.join(__dirname, file));
-  if (command.data && command.execute) {
-    client.commands.set(command.data.name, command);
-    commands.push(command.data.toJSON());
-  }
+  const command = require(`./commands/${file}`);
+  client.commands.set(command.data.name, command);
 }
 
-// Register slash commands
-client.once("ready", async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+// === Register Slash Commands ===
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-  const rest = new REST({ version: "10" }).setToken("TOKEN_DISCORD_MU");
-
+(async () => {
   try {
+    console.log("⏳ Registering slash commands...");
+    const commands = client.commands.map(cmd => cmd.data.toJSON());
+
     await rest.put(
-      Routes.applicationCommands(client.user.id),
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
     );
-    console.log("✅ Slash commands berhasil di-register.");
-  } catch (err) {
-    console.error(err);
-  }
-});
 
-// Handle slash command interaction
-client.on("interactionCreate", async (interaction) => {
+    console.log("✅ Slash commands berhasil di-register!");
+  } catch (err) {
+    console.error("❌ Error register commands:", err);
+  }
+})();
+
+// === Interaction Handler ===
+client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
@@ -56,10 +48,16 @@ client.on("interactionCreate", async (interaction) => {
   } catch (err) {
     console.error(err);
     await interaction.reply({
-      content: "❌ Terjadi error saat menjalankan command ini.",
+      content: "❌ Ada error pas jalanin command ini!",
       ephemeral: true
     });
   }
 });
 
-client.login("TOKEN_DISCORD_MU");
+// === Bot Ready ===
+client.once("ready", () => {
+  console.log(`✅ Bot login sebagai ${client.user.tag}`);
+});
+
+// === Login ===
+client.login(process.env.DISCORD_TOKEN);
