@@ -5,12 +5,12 @@ require("dotenv").config();
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
 
-// Load semua file command dari /commands
+// Load semua file command di root folder
 const commands = [];
-const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
+const commandFiles = fs.readdirSync("./").filter(file => file.endsWith(".js") && file !== "index.js");
 
 for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
+  const command = require(`./${file}`);
   client.commands.set(command.data.name, command);
   commands.push(command.data.toJSON());
 }
