@@ -1,42 +1,42 @@
-const { Client, GatewayIntentBits, REST, Routes, Collection } = require("discord.js");
 const fs = require("fs");
+const path = require("path");
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 require("dotenv").config();
 
-// Init client
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
 
-// === Load Commands ===
-const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
+// === Load command files dari root (bukan folder) ===
+const commandFiles = fs.readdirSync(__dirname).filter(file => file.endsWith(".js") && file !== "index.js");
 
+const commands = [];
 for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  client.commands.set(command.data.name, command);
+  const command = require(path.join(__dirname, file));
+  if ("data" in command && "execute" in command) {
+    client.commands.set(command.data.name, command);
+    commands.push(command.data.toJSON());
+  } else {
+    console.log(`⚠️ Command di ${file} tidak punya "data" atau "execute"`);
+  }
 }
 
-// === Register Slash Commands ===
+// === Register commands ===
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
     console.log("⏳ Registering slash commands...");
-    const commands = client.commands.map(cmd => cmd.data.toJSON());
-
     await rest.put(
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
     );
-
     console.log("✅ Slash commands berhasil di-register!");
   } catch (err) {
-    console.error("❌ Error register commands:", err);
+    console.error(err);
   }
 })();
 
-// === Interaction Handler ===
+// === Handle interaction ===
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
 
@@ -47,10 +47,7 @@ client.on("interactionCreate", async interaction => {
     await command.execute(interaction);
   } catch (err) {
     console.error(err);
-    await interaction.reply({
-      content: "❌ Ada error pas jalanin command ini!",
-      ephemeral: true
-    });
+    await interaction.reply({ content: "❌ Error saat menjalankan command!", ephemeral: true });
   }
 });
 
