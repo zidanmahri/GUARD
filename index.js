@@ -1,6 +1,17 @@
 const fs = require("fs");
 const path = require("path");
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
+const express = require('express');
+const app = express();
+const BANS_FILE = path.join(__dirname, 'bans.json');
+
+function loadBans() {
+  try {
+    return JSON.parse(fs.readFileSync(BANS_FILE, 'utf8')) || [];
+  } catch (e) {
+    return [];
+  }
+}
 require("dotenv").config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -58,3 +69,16 @@ client.once("ready", () => {
 
 // === Login ===
 client.login(process.env.DISCORD_TOKEN);
+
+// === Simple HTTP server untuk game Roblox mengambil bans ===
+app.get('/bans', (req, res) => {
+  res.json(loadBans());
+});
+
+// root for healthchecks
+app.get('/', (req, res) => {
+  res.send('GUARD bot is running');
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`HTTP server berjalan di http://localhost:${port}`));
