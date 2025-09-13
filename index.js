@@ -3,6 +3,7 @@ const path = require("path");
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 const express = require('express');
 const app = express();
+app.use(express.json());
 const BANS_FILE = path.join(__dirname, 'bans.json');
 
 function loadBans() {
@@ -73,6 +74,52 @@ client.login(process.env.DISCORD_TOKEN);
 // === Simple HTTP server untuk game Roblox mengambil bans ===
 app.get('/bans', (req, res) => {
   res.json(loadBans());
+});
+
+// Backwards-compatible API endpoints for external services to create/remove bans
+app.post('/api/bans', (req, res) => {
+  const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+  const auth = req.get('authorization') || '';
+  if (token && auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+
+  const body = req.body;
+  if (!body || (!body.userId && !body.username)) return res.status(400).json({ error: 'Missing userId or username' });
+
+  const bans = loadBans();
+  const entry = {
+    userId: body.userId || body.id || null,
+    username: body.username || null,
+    reason: body.reason || body.reason || 'No reason provided',
+    bannedBy: body.bannedBy || 'system',
+    timestamp: body.timestamp || new Date().toISOString()
+  };
+  // avoid duplicates by userId or username
+  if (entry.userId && bans.find(b => b.userId == entry.userId)) return res.status(200).json({ ok: true, note: 'already banned' });
+  if (entry.username && bans.find(b => b.username && b.username.toLowerCase() === (entry.username||'').toLowerCase())) return res.status(200).json({ ok: true, note: 'already banned' });
+
+  bans.push(entry);
+  fs.writeFileSync(BANS_FILE, JSON.stringify(bans, null, 2));
+  return res.status(201).json({ ok: true, entry });
+});
+
+app.post('/api/bans/unban', (req, res) => {
+  const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+  const auth = req.get('authorization') || '';
+  if (token && auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+
+  const body = req.body;
+  if (!body || !body.input) return res.status(400).json({ error: 'Missing input' });
+
+  const bans = loadBans();
+  const before = bans.length;
+  const filtered = bans.filter(b => {
+    if (!b) return false;
+    if (b.username && b.username.toLowerCase() === (body.input||'').toLowerCase()) return false;
+    if (b.userId && b.userId.toString() === (''+body.input)) return false;
+    return true;
+  });
+  fs.writeFileSync(BANS_FILE, JSON.stringify(filtered, null, 2));
+  return res.json({ ok: true, removed: before - filtered.length });
 });
 
 // root for healthchecks

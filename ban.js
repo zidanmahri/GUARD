@@ -56,7 +56,15 @@ module.exports = {
       };
 
       // Determine endpoint/token from env vars (support Railway names)
-      const endpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+      // If user set a base URL (like https://...railway.app) we'll append the API path.
+      const rawEndpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+      let endpoint = rawEndpoint;
+      if (rawEndpoint) {
+        // normalize: if user provided a base (no path) append /api/bans
+        if (!rawEndpoint.endsWith('/api/bans') && !rawEndpoint.endsWith('/bans')) {
+          endpoint = rawEndpoint.replace(/\/+$/,'') + '/api/bans';
+        }
+      }
       const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
 
       // If BAN_ENDPOINT/API_BASE/API_URL is configured, POST to game backend to persist ban there
@@ -64,11 +72,18 @@ module.exports = {
         try {
           const headers = { 'Content-Type': 'application/json' };
           if (token) headers['Authorization'] = `Bearer ${token}`;
-          await fetch(endpoint, {
+          const resp = await fetch(endpoint, {
             method: 'POST',
             headers,
             body: JSON.stringify(entry)
           });
+          let respBody = null;
+          try { respBody = await resp.json(); } catch (e) { respBody = null; }
+          console.log('BAN POST to', endpoint, 'status', resp.status, 'body', respBody);
+          if (!resp.ok) {
+            await interaction.editReply({ content: `Gagal kirim ke backend (status ${resp.status}). Cek logs.` });
+            return;
+          }
           await interaction.editReply({ content: 'User diban dan dikirim ke backend game.' });
           return;
         } catch (err) {

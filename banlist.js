@@ -18,7 +18,13 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
     const limit = interaction.options.getInteger('limit') || 10;
 
-    const endpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+    const rawEndpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+    let endpoint = rawEndpoint;
+    if (rawEndpoint) {
+      if (!rawEndpoint.endsWith('/api/bans') && !rawEndpoint.endsWith('/bans')) {
+        endpoint = rawEndpoint.replace(/\/+$/,'') + '/api/bans';
+      }
+    }
     const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
 
     try {
@@ -26,8 +32,11 @@ module.exports = {
       if (endpoint) {
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(endpoint);
-        if (res.ok) bans = await res.json();
+        const res = await fetch(endpoint, { headers });
+        let body = null;
+        try { body = await res.json(); } catch(e) { body = null; }
+        console.log('BANLIST GET', endpoint, 'status', res.status, 'body', body);
+        if (res.ok && Array.isArray(body)) bans = body;
       }
 
       if (!bans || bans.length === 0) bans = loadBansLocal();
