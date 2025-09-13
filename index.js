@@ -86,10 +86,13 @@ app.post('/api/bans', (req, res) => {
   if (!body || (!body.userId && !body.username)) return res.status(400).json({ error: 'Missing userId or username' });
 
   const bans = loadBans();
+  // determine next id (incremental)
+  const maxId = bans.reduce((m, b) => Math.max(m, Number(b.id || 0)), 0);
   const entry = {
+    id: (maxId + 1),
     userId: body.userId || body.id || null,
     username: body.username || null,
-    reason: body.reason || body.reason || 'No reason provided',
+    reason: body.reason || 'No reason provided',
     bannedBy: body.bannedBy || 'system',
     timestamp: body.timestamp || new Date().toISOString()
   };
@@ -120,6 +123,14 @@ app.post('/api/bans/unban', (req, res) => {
   });
   fs.writeFileSync(BANS_FILE, JSON.stringify(filtered, null, 2));
   return res.json({ ok: true, removed: before - filtered.length });
+});
+
+// Return bans after a given id (for incremental polling from game servers)
+app.get('/api/bans/after', (req, res) => {
+  const since = Number(req.query.since || 0);
+  const bans = loadBans();
+  const filtered = bans.filter(b => Number(b.id || 0) > since);
+  return res.json(filtered);
 });
 
 // root for healthchecks
