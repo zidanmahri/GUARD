@@ -38,12 +38,31 @@ module.exports = {
       const followers = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`)).json()).count || 0;
       const following = (await (await fetch(`https://friends.roblox.com/v1/users/${userId}/followings/count`)).json()).count || 0;
 
+      // Check if this user is banned in our backend
+      const rawEndpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+      let backendBans = [];
+      try {
+        if (rawEndpoint) {
+          // try normalized /bans first
+          let ep = rawEndpoint;
+          if (!rawEndpoint.endsWith('/bans')) ep = rawEndpoint.replace(/\/+$/,'') + '/bans';
+          const bres = await fetch(ep);
+          if (bres.ok) backendBans = await bres.json();
+        }
+      } catch (e) {
+        console.error('Failed to fetch backend bans for userinfo:', e);
+      }
+
+      const isBanned = Array.isArray(backendBans) && backendBans.some(b => String(b.userId) === String(userId) || (b.username && String(b.username).toLowerCase() === String(username).toLowerCase()));
+
       const embed = new EmbedBuilder()
         .setColor(0xcc0000)
         .setTitle(`STECU ${info.displayName} / ${info.name}`)
         .setURL(`https://www.roblox.com/users/${userId}/profile`)
         .setThumbnail(avatarUrl)
         .addFields(
+          // show banned status first if banned
+          ...(isBanned ? [{ name: 'Status', value: '**BANNED**', inline: true }] : []),
           { name: "Username", value: info.name, inline: true },
           { name: "ID", value: `${userId}`, inline: true },
           { name: "Friends", value: `${friends}`, inline: true },
