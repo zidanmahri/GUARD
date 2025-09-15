@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
@@ -45,13 +45,26 @@ module.exports = {
 
       const sliced = bans.slice(0, Math.min(limit, 25));
       const embed = new EmbedBuilder().setTitle('Ban List').setColor(0xcc0000).setTimestamp();
+      const rows = [];
+      let currentRow = new ActionRowBuilder();
+      let btnCount = 0;
       for (const b of sliced) {
         embed.addFields({ name: `${b.username} (${b.userId})`, value: `${b.reason} — by ${b.bannedBy} (${new Date(b.timestamp).toLocaleString()})`, inline: false });
+        // add a button for this ban (customId contains userId)
+        const btn = new ButtonBuilder()
+          .setCustomId(`unban:${b.userId}`)
+          .setLabel(`Unban ${b.userId}`)
+          .setStyle(ButtonStyle.Danger);
+        currentRow.addComponents(btn);
+        btnCount++;
+        // Discord allows max 5 buttons per row; we'll only create up to 5 total
+        if (btnCount >= 5) break;
       }
+      if (btnCount > 0) rows.push(currentRow);
 
       if (bans.length > sliced.length) embed.setFooter({ text: `Showing ${sliced.length} of ${bans.length} bans` });
 
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.editReply({ embeds: [embed], components: rows });
     } catch (err) {
       console.error(err);
       return interaction.editReply({ content: 'Gagal mengambil daftar ban.' });

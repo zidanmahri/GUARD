@@ -63,6 +63,37 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 // === Handle interaction ===
 client.on("interactionCreate", async interaction => {
+  // Button interaction handling (unban)
+  if (interaction.isButton && interaction.isButton()) {
+    try {
+      const custom = interaction.customId || '';
+      if (custom.startsWith('unban:')) {
+        const input = custom.split(':')[1];
+        // call backend unban endpoint
+        const rawEndpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
+        let endpoint = rawEndpoint;
+        if (rawEndpoint && !rawEndpoint.endsWith('/api/bans/unban') && !rawEndpoint.endsWith('/bans/unban')) endpoint = rawEndpoint.replace(/\/+$/,'') + '/api/bans/unban';
+        const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+        if (endpoint) {
+          const headers = { 'Content-Type': 'application/json' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const resp = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ input, requestedBy: interaction.user.tag }) });
+          if (resp.ok) {
+            await interaction.reply({ content: `User ${input} has been unbanned.`, ephemeral: true });
+          } else {
+            await interaction.reply({ content: `Failed to unban ${input} (status ${resp.status}).`, ephemeral: true });
+          }
+        } else {
+          await interaction.reply({ content: 'Backend endpoint is not configured.', ephemeral: true });
+        }
+      }
+    } catch (err) {
+      console.error('Error handling button interaction', err);
+      try { await interaction.reply({ content: 'Error processing button.', ephemeral: true }); } catch (e) { console.error(e); }
+    }
+    return;
+  }
+
   if (!interaction.isCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
