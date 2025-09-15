@@ -5,6 +5,7 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 const BANS_FILE = path.join(__dirname, 'bans.json');
+const COMMANDS_FILE = path.join(__dirname, 'commands.json');
 
 function loadBans() {
   try {
@@ -12,6 +13,18 @@ function loadBans() {
   } catch (e) {
     return [];
   }
+}
+
+function loadCommands() {
+  try {
+    return JSON.parse(fs.readFileSync(COMMANDS_FILE, 'utf8')) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCommands(cmds) {
+  fs.writeFileSync(COMMANDS_FILE, JSON.stringify(cmds, null, 2));
 }
 require("dotenv").config();
 
@@ -132,6 +145,60 @@ app.get('/api/bans/after', (req, res) => {
   const filtered = bans.filter(b => Number(b.id || 0) > since);
   return res.json(filtered);
 });
+
+// Commands API for server control (restart, etc.)
+app.post('/api/commands', (req, res) => {
+  const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+  const auth = req.get('authorization') || '';
+  if (token && auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+
+  const body = req.body;
+  if (!body || !body.type) return res.status(400).json({ error: 'Missing type' });
+
+  const cmds = loadCommands();
+  const maxId = cmds.reduce((m, c) => Math.max(m, Number(c.id || 0)), 0);
+  const entry = {
+    id: maxId + 1,
+    type: body.type,
+    payload: body.payload || null,
+    createdBy: body.createdBy || 'system',
+    timestamp: new Date().toISOString()
+  };
+  cmds.push(entry);
+  saveCommands(cmds);
+  return res.status(201).json({ ok: true, entry });
+});
+
+app.get('/api/commands/after', (req, res) => {
+  const since = Number(req.query.since || 0);
+  const cmds = loadCommands();
+  const filtered = cmds.filter(c => Number(c.id || 0) > since);
+  return res.json(filtered);
+});
+
+// convenience endpoint for restarting servers via command
+function handleRestartCommand(req, res) {
+  const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+  const auth = req.get('authorization') || '';
+  if (token && auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+
+  const cmds = loadCommands();
+  const maxId = cmds.reduce((m, c) => Math.max(m, Number(c.id || 0)), 0);
+  const entry = {
+    id: maxId + 1,
+    type: 'restart',
+    payload: req.body || null,
+    createdBy: (req.body && req.body.createdBy) ? req.body.createdBy : 'system',
+    timestamp: new Date().toISOString()
+  };
+  cmds.push(entry);
+  saveCommands(cmds);
+  return res.status(201).json({ ok: true, entry });
+}
+
+app.post('/api/commands/restart', handleRestartCommand);
+app.post('/commands/restart', handleRestartCommand);
+app.post('/restart', handleRestartCommand);
 
 // root for healthchecks
 app.get('/', (req, res) => {
