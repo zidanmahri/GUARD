@@ -166,6 +166,7 @@ app.post('/api/commands', (req, res) => {
   };
   cmds.push(entry);
   saveCommands(cmds);
+  console.log('Command created:', entry);
   return res.status(201).json({ ok: true, entry });
 });
 
@@ -193,6 +194,7 @@ function handleRestartCommand(req, res) {
   };
   cmds.push(entry);
   saveCommands(cmds);
+  console.log('Restart command created:', entry);
   return res.status(201).json({ ok: true, entry });
 }
 
