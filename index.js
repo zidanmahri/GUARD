@@ -72,8 +72,24 @@ client.on("interactionCreate", async interaction => {
     await command.execute(interaction);
   } catch (err) {
     console.error(err);
-    await interaction.reply({ content: "❌ Error saat menjalankan command!", ephemeral: true });
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: "❌ Error saat menjalankan command!", ephemeral: true });
+      } else {
+        await interaction.reply({ content: "❌ Error saat menjalankan command!", ephemeral: true });
+      }
+    } catch (e) {
+      console.error('Failed to notify interaction of error:', e);
+    }
   }
+});
+
+// prevent process crash on uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at:', p, 'reason:', reason);
 });
 
 // === Bot Ready ===

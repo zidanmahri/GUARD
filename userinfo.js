@@ -46,7 +46,10 @@ module.exports = {
           // try normalized /bans first
           let ep = rawEndpoint;
           if (!rawEndpoint.endsWith('/bans')) ep = rawEndpoint.replace(/\/+$/,'') + '/bans';
-          const bres = await fetch(ep);
+          const headers = { 'Content-Type': 'application/json' };
+          const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const bres = await fetch(ep, { headers });
           if (bres.ok) backendBans = await bres.json();
         }
       } catch (e) {
