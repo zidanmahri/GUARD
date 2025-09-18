@@ -90,7 +90,24 @@ local function fetchNewCommands()
                     -- attempt safe kick
                     pcall(function() plr:Kick(reason) end)
                 end
-                -- processed restart
+                -- processed restart: ack the command to backend so it won't be re-delivered
+                local ackOk, ackRes = pcall(function()
+                    return HttpService:RequestAsync({
+                        Url = base .. "/api/commands/" .. tostring(cmd.id) .. "/ack",
+                        Method = "POST",
+                        Headers = getHeaders(),
+                        Body = HttpService:JSONEncode({ processedBy = "roblox-server" })
+                    })
+                end)
+                if not ackOk then
+                    warn("CommandPoller: ack request failed:", ackRes)
+                else
+                    if not ackRes.Success then
+                        warn("CommandPoller: ack HTTP error:", ackRes.StatusCode, ackRes.StatusMessage, ackRes.Body)
+                    else
+                        warn("CommandPoller: ack succeeded for id=", tostring(cmd.id))
+                    end
+                end
             else
                 warn("CommandPoller: unknown command type=", tostring(cmd.type), "id=", tostring(cmd.id))
             end

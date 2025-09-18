@@ -257,6 +257,24 @@ app.post('/api/commands/restart', handleRestartCommand);
 app.post('/commands/restart', handleRestartCommand);
 app.post('/restart', handleRestartCommand);
 
+// Acknowledge a command as processed. Game servers should POST here after handling a command.
+app.post('/api/commands/:id/ack', (req, res) => {
+  const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
+  const auth = req.get('authorization') || '';
+  if (token && auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+
+  const id = Number(req.params.id || 0);
+  if (!id) return res.status(400).json({ error: 'Invalid id' });
+
+  const cmds = loadCommands();
+  const before = cmds.length;
+  const filtered = cmds.filter(c => Number(c.id || 0) !== id);
+  if (filtered.length === before) return res.status(404).json({ error: 'Not found' });
+  saveCommands(filtered);
+  console.log(`Command acked and removed: id=${id}`);
+  return res.json({ ok: true, removed: before - filtered.length });
+});
+
 // root for healthchecks
 app.get('/', (req, res) => {
   res.send('GUARD bot is running');
