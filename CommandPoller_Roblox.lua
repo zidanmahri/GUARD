@@ -47,13 +47,37 @@ local function fetchNewCommands()
         return
     end
 
+    -- Try to decode body
     local parsed = nil
     local success, decoded = pcall(function() return HttpService:JSONDecode(resp.Body) end)
-    if success and type(decoded) == "table" then
+    if success and type(decoded) == "table" and #decoded > 0 then
         parsed = decoded
     else
-        -- nothing new or invalid JSON
-        return
+        -- nothing new in /after; attempt a single /latest fallback to diagnose
+        warn("CommandPoller: /api/commands/after returned empty or invalid. Trying /api/commands/latest for debugging.")
+        local ok2, res2 = pcall(function()
+            return HttpService:RequestAsync({
+                Url = base .. "/api/commands/latest",
+                Method = "GET",
+                Headers = getHeaders(),
+            })
+        end)
+        if not ok2 then
+            warn("CommandPoller: /latest request failed:", res2)
+            return
+        end
+        if not res2.Success then
+            warn("CommandPoller: /latest HTTP error:", res2.StatusCode, res2.StatusMessage, res2.Body)
+            return
+        end
+        local ok3, decodedLatest = pcall(function() return HttpService:JSONDecode(res2.Body) end)
+        if ok3 and type(decodedLatest) == "table" then
+            parsed = { decodedLatest }
+            warn("CommandPoller: /latest returned a command (id=", tostring(decodedLatest.id), ").")
+        else
+            warn("CommandPoller: /latest returned no command or invalid JSON:", res2.Body)
+            return
+        end
     end
 
     for _, cmd in ipairs(parsed) do
