@@ -224,6 +224,14 @@ app.get('/api/commands/after', (req, res) => {
   return res.json(filtered);
 });
 
+// Return the latest command (convenience endpoint for game servers)
+app.get('/api/commands/latest', (req, res) => {
+  const cmds = loadCommands();
+  if (!cmds || cmds.length === 0) return res.json(null);
+  const latest = cmds.reduce((a, b) => (Number(a.id || 0) > Number(b.id || 0) ? a : b));
+  return res.json(latest || null);
+});
+
 // convenience endpoint for restarting servers via command
 function handleRestartCommand(req, res) {
   const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
