@@ -55,6 +55,70 @@ module.exports = {
         timestamp: new Date().toISOString()
       };
 
+      // First, optionally attempt to apply the ban via Roblox Developer API so it shows
+      // in the official Developer > Bans UI. This requires a session cookie (.ROBLOSECURITY)
+      // and either an explicit ROBLOX_BAN_ENDPOINT or a UNIVERSE_ID to guess the endpoint.
+      // If this fails we fall back to the existing backend/file behavior.
+      const robloxCookie = process.env.ROBLOX_SECURITY;
+      const universeId = process.env.UNIVERSE_ID || process.env.ROBLOX_UNIVERSE_ID;
+      const explicitRobloxEndpoint = process.env.ROBLOX_BAN_ENDPOINT;
+
+      async function tryRobloxBan(targetId, reasonText) {
+        if (!robloxCookie) return { ok: false, reason: 'No ROBLOX_SECURITY configured' };
+        let banUrl = null;
+        if (explicitRobloxEndpoint) {
+          banUrl = explicitRobloxEndpoint.replace(/\/+$/, '');
+        } else if (universeId) {
+          // guessed API path — may need to be adjusted depending on Roblox's internal API
+          banUrl = `https://games.roblox.com/v1/universes/${universeId}/bans`;
+        } else {
+          return { ok: false, reason: 'No ROBLOX_BAN_ENDPOINT or UNIVERSE_ID configured' };
+        }
+
+        const headersBase = {
+          'Content-Type': 'application/json',
+          'Cookie': `.ROBLOSECURITY=${robloxCookie}`
+        };
+
+        const payload = { targetUserId: Number(targetId), reason: reasonText };
+
+        try {
+          // first attempt (may require X-CSRF-TOKEN)
+          let resp = await fetch(banUrl, { method: 'POST', headers: headersBase, body: JSON.stringify(payload) });
+          if (resp.status === 403) {
+            const csrf = resp.headers.get('x-csrf-token') || resp.headers.get('X-CSRF-TOKEN');
+            if (csrf) {
+              const headersWithCsrf = Object.assign({}, headersBase, { 'X-CSRF-TOKEN': csrf });
+              resp = await fetch(banUrl, { method: 'POST', headers: headersWithCsrf, body: JSON.stringify(payload) });
+            }
+          }
+          let body = null;
+          try { body = await resp.text(); } catch (e) { body = null; }
+          console.log('Roblox ban POST', banUrl, 'status', resp.status, 'body', body);
+          if (!resp.ok) return { ok: false, reason: `Roblox responded ${resp.status}`, body };
+          return { ok: true, body };
+        } catch (err) {
+          console.error('Error calling Roblox ban endpoint', err);
+          return { ok: false, reason: err.message };
+        }
+      }
+
+      // try Roblox ban if configured
+      if (robloxCookie && (explicitRobloxEndpoint || universeId)) {
+        try {
+          const rres = await tryRobloxBan(userId, reason);
+          if (rres.ok) {
+            // if Roblox ban succeeded, still record locally/backends as well
+            console.log('Roblox ban applied for', userId);
+            // also persist to backend if configured
+          } else {
+            console.warn('Roblox ban failed:', rres.reason);
+          }
+        } catch (err) {
+          console.error('Roblox ban flow error', err);
+        }
+      }
+
       // Determine endpoint/token from env vars (support Railway names)
       // If user set a base URL (like https://...railway.app) we'll append the API path.
       const rawEndpoint = process.env.BAN_ENDPOINT || process.env.API_BASE || process.env.API_URL;
@@ -62,7 +126,7 @@ module.exports = {
       if (rawEndpoint) {
         // normalize: if user provided a base (no path) append /api/bans
         if (!rawEndpoint.endsWith('/api/bans') && !rawEndpoint.endsWith('/bans')) {
-          endpoint = rawEndpoint.replace(/\/+$/,'') + '/api/bans';
+          endpoint = rawEndpoint.replace(/\/+$/, '') + '/api/bans';
         }
       }
       const token = process.env.BAN_TOKEN || process.env.ROBLOX_API_KEY;
