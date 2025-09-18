@@ -81,15 +81,22 @@ local function fetchNewCommands()
     end
 
     for _, cmd in ipairs(parsed) do
-        lastCmdId = math.max(lastCmdId, tonumber(cmd.id) or 0)
-        if cmd.type == "restart" then
-            local reason = (cmd.payload and cmd.payload.reason) and cmd.payload.reason or "Server is restarting"
-            warn("CommandPoller: processing restart id=", cmd.id, "reason=", reason)
-            for _, plr in ipairs(Players:GetPlayers()) do
-                -- attempt safe kick
-                pcall(function() plr:Kick(reason) end)
+        local cid = tonumber(cmd.id) or 0
+        if cid > lastCmdId then
+            if cmd.type == "restart" then
+                local reason = (cmd.payload and cmd.payload.reason) and cmd.payload.reason or "Server is restarting"
+                warn("CommandPoller: processing restart id=", cmd.id, "reason=", reason)
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    -- attempt safe kick
+                    pcall(function() plr:Kick(reason) end)
+                end
+                -- processed restart
+            else
+                warn("CommandPoller: unknown command type=", tostring(cmd.type), "id=", tostring(cmd.id))
             end
-            -- processed restart
+            lastCmdId = cid
+        else
+            warn("CommandPoller: skipping already-processed command id=", cid)
         end
     end
 end
